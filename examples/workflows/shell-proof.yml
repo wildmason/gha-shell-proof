@@ -1,0 +1,60 @@
+name: shell-proof example
+on: [push]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  linux-bash:
+    runs-on: ubuntu-latest
+    steps:
+      - name: bash default
+        run: |
+          echo "default bash on linux"
+      - name: explicit sh
+        shell: sh
+        run: |
+          echo "sh on linux"
+      - name: python explicit
+        shell: python
+        run: |
+          print("python on linux")
+
+  windows-pwsh:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: src
+    steps:
+      - name: pwsh from job defaults
+        run: |
+          Write-Host "pwsh on windows"
+      - name: powershell explicit
+        shell: powershell
+        run: |
+          Write-Host "windows powershell"
+      - name: cmd explicit
+        shell: cmd
+        run: |
+          echo cmd on windows
+
+  macos-bash:
+    runs-on: macos-latest
+    steps:
+      - name: bash default
+        run: |
+          echo "bash on macos"
+      - name: pwsh explicit
+        shell: pwsh
+        run: |
+          Write-Host "pwsh on macos"
+
+  custom-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - name: perl interpreter
+        shell: "perl {0}"
+        run: |
+          print "perl from custom template\n";

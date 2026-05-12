@@ -1,0 +1,41 @@
+name: Released Action Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  action-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: wildmason/gha-shell-proof@v1
+        with:
+          command: check-workflow
+          workspace: examples
+          workflow: examples/workflows/shell-proof.yml
+          format: json
+          output: target/action-smoke.json
+      - name: Check receipt
+        run: |
+          jq -e '
+            .summary.failed == 0
+            and (.plans | length) == 9
+            and ([.plans[] | .plan.classification] | unique | sort) == ["compatible","exact"]
+          ' target/action-smoke.json
+      - name: Smoke render via released action
+        uses: wildmason/gha-shell-proof@v1
+        with:
+          command: render
+          runner-os: linux
+          shell: bash
+          script: examples/scripts/hello.sh
+          output-script: target/hello.rendered.sh
+          format: json
+          output: target/action-smoke.render.json
+      - name: Verify rendered script
+        run: |
+          jq -e '.summary.failed == 0 and (.plans[0].rendered_script.line_ending == "lf")' target/action-smoke.render.json
+          test -s target/hello.rendered.sh

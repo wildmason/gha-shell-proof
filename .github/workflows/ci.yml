@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Format
+        run: cargo fmt --check
+      - name: Test
+        run: cargo test --locked
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - name: Docs
+        run: cargo doc --locked --no-deps
+      - name: Package
+        run: cargo package --locked
+      - name: Smoke check-workflow
+        run: |
+          cargo run --locked -- check-workflow \
+            --workflow examples/workflows/shell-proof.yml \
+            --workspace examples \
+            --format json \
+            --output target/shell-proof.check.json
+      - name: Verify smoke receipt
+        run: |
+          jq -e '
+            .summary.failed == 0
+            and (.plans | length) == 9
+            and ([.plans[] | .plan.classification] | unique | sort) == ["compatible","exact"]
+          ' target/shell-proof.check.json
+      - name: Smoke render (pwsh on windows)
+        run: |
+          cargo run --locked -- render \
+            --runner-os windows --shell pwsh \
+            --script examples/scripts/hello.ps1 \
+            --output-script target/hello.rendered.ps1 \
+            --format json \
+            --output target/shell-proof.render.json
+      - name: Verify rendered script
+        run: |
+          jq -e '.summary.failed == 0 and (.plans[0].rendered_script.line_ending == "crlf")' target/shell-proof.render.json
+          head -1 target/hello.rendered.ps1 | grep -F "ErrorActionPreference = 'stop'"
+          tail -1 target/hello.rendered.ps1 | grep -F 'exit $LASTEXITCODE'

@@ -1,0 +1,163 @@
+name: "GHA Shell Proof"
+description: "Plan and validate GitHub Actions `run:`-step shell invocations with receipt-backed evidence."
+author: "Wildmason"
+branding:
+  icon: "terminal"
+  color: "gray-dark"
+inputs:
+  version:
+    description: "Crate version to install, or `latest`."
+    required: false
+    default: "latest"
+  command:
+    description: "Subcommand to run: plan, render, or check-workflow."
+    required: false
+    default: "check-workflow"
+  runner-os:
+    description: "Target runner OS: linux, macos, or windows."
+    required: false
+    default: "linux"
+  shell:
+    description: "Shell name (bash, sh, pwsh, powershell, cmd, python) or custom `<command> {0}` template."
+    required: false
+  working-directory:
+    description: "Step-level working directory."
+    required: false
+  workspace:
+    description: "Workspace directory."
+    required: false
+    default: "."
+  temp-dir:
+    description: "Runner temp directory used in script-path placeholders."
+    required: false
+  script-path:
+    description: "Concrete script-file path; otherwise a deterministic placeholder is used."
+    required: false
+  job-defaults-run-shell:
+    description: "Job-level `defaults.run.shell` value."
+    required: false
+  job-defaults-run-working-directory:
+    description: "Job-level `defaults.run.working-directory` value."
+    required: false
+  defaults-run-shell:
+    description: "Workflow-level `defaults.run.shell` value."
+    required: false
+  defaults-run-working-directory:
+    description: "Workflow-level `defaults.run.working-directory` value."
+    required: false
+  workflow:
+    description: "Newline-separated workflow paths for `check-workflow`."
+    required: false
+  script:
+    description: "Source script path for `render`."
+    required: false
+  output-script:
+    description: "Output rendered-script path for `render`."
+    required: false
+  format:
+    description: "Receipt format: text, json, or markdown."
+    required: false
+    default: "text"
+  output:
+    description: "Optional receipt output path."
+    required: false
+  strict:
+    description: "Treat warnings as failures."
+    required: false
+    default: "false"
+runs:
+  using: "composite"
+  steps:
+    - name: "Install gha-shell-proof"
+      shell: "bash"
+      run: |
+        if command -v gha-shell-proof >/dev/null 2>&1; then
+          exit 0
+        fi
+
+        if [ "${SHELL_PROOF_VERSION}" = "latest" ]; then
+          cargo install gha-shell-proof --locked
+        else
+          cargo install gha-shell-proof --version "${SHELL_PROOF_VERSION}" --locked
+        fi
+      env:
+        SHELL_PROOF_VERSION: ${{ inputs.version }}
+    - name: "Run gha-shell-proof"
+      shell: "bash"
+      run: |
+        set -euo pipefail
+
+        args=("$SHELL_PROOF_COMMAND")
+
+        append_if_set() {
+          local flag="$1"
+          local value="$2"
+          if [ -n "$value" ]; then
+            args+=("$flag" "$value")
+          fi
+        }
+
+        append_lines() {
+          local flag="$1"
+          local value="$2"
+          while IFS= read -r line; do
+            if [ -n "$line" ]; then
+              args+=("$flag" "$line")
+            fi
+          done <<< "$value"
+        }
+
+        case "$SHELL_PROOF_COMMAND" in
+          plan|render)
+            append_if_set --runner-os "$SHELL_PROOF_RUNNER_OS"
+            append_if_set --shell "$SHELL_PROOF_SHELL"
+            append_if_set --working-directory "$SHELL_PROOF_WORKING_DIRECTORY"
+            append_if_set --workspace "$SHELL_PROOF_WORKSPACE"
+            append_if_set --temp-dir "$SHELL_PROOF_TEMP_DIR"
+            append_if_set --script-path "$SHELL_PROOF_SCRIPT_PATH"
+            append_if_set --job-defaults-run-shell "$SHELL_PROOF_JOB_DEFAULTS_SHELL"
+            append_if_set --job-defaults-run-working-directory "$SHELL_PROOF_JOB_DEFAULTS_WORKDIR"
+            append_if_set --defaults-run-shell "$SHELL_PROOF_DEFAULTS_SHELL"
+            append_if_set --defaults-run-working-directory "$SHELL_PROOF_DEFAULTS_WORKDIR"
+            if [ "$SHELL_PROOF_COMMAND" = "render" ]; then
+              append_if_set --script "$SHELL_PROOF_SCRIPT"
+              append_if_set --output-script "$SHELL_PROOF_OUTPUT_SCRIPT"
+            fi
+            ;;
+          check-workflow)
+            append_if_set --runner-os "$SHELL_PROOF_RUNNER_OS"
+            append_if_set --workspace "$SHELL_PROOF_WORKSPACE"
+            append_if_set --temp-dir "$SHELL_PROOF_TEMP_DIR"
+            append_lines --workflow "$SHELL_PROOF_WORKFLOW"
+            ;;
+          *)
+            echo "Unsupported command: $SHELL_PROOF_COMMAND" >&2
+            exit 2
+            ;;
+        esac
+
+        args+=(--format "$SHELL_PROOF_FORMAT")
+        append_if_set --output "$SHELL_PROOF_OUTPUT"
+        if [ "$SHELL_PROOF_STRICT" = "true" ]; then
+          args+=(--strict)
+        fi
+
+        gha-shell-proof "${args[@]}"
+      env:
+        SHELL_PROOF_COMMAND: ${{ inputs.command }}
+        SHELL_PROOF_RUNNER_OS: ${{ inputs.runner-os }}
+        SHELL_PROOF_SHELL: ${{ inputs.shell }}
+        SHELL_PROOF_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        SHELL_PROOF_WORKSPACE: ${{ inputs.workspace }}
+        SHELL_PROOF_TEMP_DIR: ${{ inputs.temp-dir }}
+        SHELL_PROOF_SCRIPT_PATH: ${{ inputs.script-path }}
+        SHELL_PROOF_JOB_DEFAULTS_SHELL: ${{ inputs.job-defaults-run-shell }}
+        SHELL_PROOF_JOB_DEFAULTS_WORKDIR: ${{ inputs.job-defaults-run-working-directory }}
+        SHELL_PROOF_DEFAULTS_SHELL: ${{ inputs.defaults-run-shell }}
+        SHELL_PROOF_DEFAULTS_WORKDIR: ${{ inputs.defaults-run-working-directory }}
+        SHELL_PROOF_WORKFLOW: ${{ inputs.workflow }}
+        SHELL_PROOF_SCRIPT: ${{ inputs.script }}
+        SHELL_PROOF_OUTPUT_SCRIPT: ${{ inputs.output-script }}
+        SHELL_PROOF_FORMAT: ${{ inputs.format }}
+        SHELL_PROOF_OUTPUT: ${{ inputs.output }}
+        SHELL_PROOF_STRICT: ${{ inputs.strict }}
