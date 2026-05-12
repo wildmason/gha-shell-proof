@@ -14,9 +14,8 @@ inputs:
     required: false
     default: "check-workflow"
   runner-os:
-    description: "Target runner OS: linux, macos, or windows."
+    description: "Target runner OS: linux, macos, or windows. Required for `plan` and `render`. Optional override for `check-workflow` — leave empty to infer from each job's `runs-on:`."
     required: false
-    default: "linux"
   shell:
     description: "Shell name (bash, sh, pwsh, powershell, cmd, python) or custom `<command> {0}` template."
     required: false

@@ -54,3 +54,38 @@ jobs:
           jq -e '.summary.failed == 0 and (.plans[0].rendered_script.line_ending == "crlf")' target/shell-proof.render.json
           head -1 target/hello.rendered.ps1 | grep -F "ErrorActionPreference = 'stop'"
           tail -1 target/hello.rendered.ps1 | grep -F 'exit $LASTEXITCODE'
+
+  action-self-smoke:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run local action — check-workflow
+        uses: ./
+        with:
+          command: check-workflow
+          workspace: examples
+          workflow: examples/workflows/shell-proof.yml
+          format: json
+          output: target/action-self.check.json
+      - name: Verify check receipt
+        run: |
+          jq -e '
+            .summary.failed == 0
+            and (.plans | length) == 9
+            and ([.plans[] | .plan.classification] | unique | sort) == ["compatible","exact"]
+          ' target/action-self.check.json
+      - name: Run local action — render (pwsh on windows)
+        uses: ./
+        with:
+          command: render
+          runner-os: windows
+          shell: pwsh
+          script: examples/scripts/hello.ps1
+          output-script: target/action-self.rendered.ps1
+          format: json
+          output: target/action-self.render.json
+      - name: Verify rendered script
+        run: |
+          jq -e '.summary.failed == 0 and (.plans[0].rendered_script.line_ending == "crlf")' target/action-self.render.json
+          head -1 target/action-self.rendered.ps1 | grep -F "ErrorActionPreference = 'stop'"
